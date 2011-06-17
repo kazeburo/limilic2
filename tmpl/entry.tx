@@ -1,0 +1,72 @@
+: cascade base
+
+: around content -> {
+: include entry_body { article => $c.stash.article }
+
+<a name="comment"></a>
+<h3 id="article_comment">コメント</h3>
+
+: for $article_comments -> $comment {
+<div class="comment">
+<div class="comment_sign">
+posted by <span><a href="<: $comment.openid :>"><: $comment.openid :></a></span> | <span><: $comment.created_on.ymd :> <: $comment.created_on.hms :></span>
+<: if ($comment.can_delete($c.stash.user)) { :> | <a href="<: $c.req.uri_for('/entry/delete_comment',[ id => $article.id, comment_id => $comment.id ]) :>">削除</a><: } :>
+</div>
+<div class="comment_body entry">
+<: comment.converted_body :>
+</div>
+</div>
+: }
+
+: if (! $article_comments.size()) {
+<p class="article_comment_warning">コメントはありません</p>
+: }
+
+
+<h3 id="article_add_comment">コメントを投稿</h3>
+: if ( $c.stash.user.id ) {
+: block form |  fillinform( $c.req ) -> {
+<form action="<: $c.req.uri_for('/entry/'~$article.rid~'/add_comment') :>" method="post" id="add_comment">
+
+: if ( $form.has_error ) {
+<ul class="dfv_err">
+: for $form.messages -> $message {
+<li><: $message :></li>
+: }
+</ul>
+: }
+
+<fieldset>
+<ul class="mtab">
+<li><span class="add_comment_tab_menu" id="add_comment_tab_edit">コメント</span></li><li><span class="add_comment_tab_menu" id="add_comment_tab_preview">プレビュー</span></li>
+</ul>
+
+<div class="mtab_body">
+<div class="mtab_body_content" id="add_comment_tab_edit_content">
+<textarea name="body" rows="7" cols="90" id="add_comment_body_area"></textarea>
+</div>
+<div class="mtab_body_content" id="add_comment_tab_preview_content" style="display:none;">
+<div id="add_comment_body_preview" class="entry"> </div>
+</div>
+</div>
+<p>*一部の記法を除いて、<a href="http://hatenadiary.g.hatena.ne.jp/keyword/%e3%81%af%e3%81%a6%e3%81%aa%e8%a8%98%e6%b3%95%e4%b8%80%e8%a6%a7">はてな記法</a>が使えます</p>
+</fieldset>
+
+<div id="create_page_submit">
+<input value="コメント" type="submit">
+</div>
+<input type="hidden" name="id">
+</form>
+: }
+: } else {
+<p class="article_comment_warning">コメントを投稿するにはログインが必要です</p>
+: }
+: }
+
+: around pagejs -> {
+new Cpip.tabPreview( 'add_comment_tab_preview', 'add_comment_body_area', 'add_comment_body_preview' );
+new Cpip.tabCtrl('add_comment_tab_menu');
+: if ( $form.has_error ) {
+Effect.ScrollTo('add_comment',{ duration: 0.3, transition: Effect.Transitions.linear });
+: }
+: }

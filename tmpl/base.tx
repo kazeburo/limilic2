@@ -1,0 +1,64 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<title>LIMILIC <: block title -> { "-" } :> OpenIDでテキストを共有できるWebサービス</title>
+<link rel="alternate" type="applic=ation/atom+xml" title="Atom" href="<: $c.req.uri_for('/feed') :>" />
+<link rel="stylesheet" href="<: $c.req.uri_for('/static/css/site.css') :>" type="text/css" />
+</head>
+<body>
+<div id="container">
+
+<div id="header">
+<h1 class="title"><a href="<: $c.req.uri_for('/') :>">LIMILIC</a></h1>
+<div class="welcome">
+: if ( $c.stash.user ) {
+<form id="openid_form" action="<: $c.req.uri_for('/logout') :>" method="post">
+<input type="hidden" id="postkey" name="postkey" value="<: $c.stash.session.get('postkey') :>" />
+<ul>
+<li><a href="<: $c.stash.user.identity.url :>" class="identity"><: $c.stash.user.identity.display :></a></li>
+<li><a href="<: $c.req.uri_for('/') :>">トップ</a></li>
+<li><a href="<: $c.req.uri_for('/account') :>">一覧</a></li>
+<li><a href="<: $c.req.uri_for('/create') :>">新規作成</a></li>
+<li><input type="submit" id="openid_url_submit" name="openid_url_submit" value="ログアウト" /></li>
+</ul>
+</form>
+: } else { # if stash.user
+<form id="openid_form" action="<: $c.req.uri_for('/login') :>" method="post">
+<label>OpenID URL</label>
+<input type="text" id="openid_url" name="openid_url" value="" />
+<input type="hidden" id="n" name="n" value="<: $c.req.uri :>" />
+<input type="hidden" id="postkey" name="postkey" value="<: $c.stash.session.get('postkey') :>" />
+<input type="submit" id="openid_url_submit" name="openid_url_submit" value="ログイン" />
+</form>
+: }
+</div>
+</div>
+
+<div id="content">
+: block content -> { }
+<div id="content_footer"><a href="<: $c.req.uri_for('/') :>">トップ</a>
+: if ( $c.stash.user ) {
+| <a href="<: $c.req.uri_for('/account') :>">一覧</a> | <a href="<: $c.req.uri_for('/create') :>">新規作成</a>
+: }
+</div>
+</div>
+
+<div id="footer">
+<div id="copyright">&copy; nomadscafe.jp. All rights reserved.</div>
+</div>
+
+</div>
+<script type="text/javascript" src="<: $c.req.uri_for('/static/js/prototype-1.6.0.2c.js') :>"></script>
+<script type="text/javascript" src="<: $c.req.uri_for('/static/js/scriptaculous_1_8_0/scriptaculous.js',['load'=>'effects']) :>"></script>
+<script type="text/javascript" src="<: $c.req.uri_for('/static/js/site.js') :>"></script>
+<script type="text/javascript" src="http://s.hatena.ne.jp/js/HatenaStar.js"></script>
+<script type="text/javascript">
+Hatena.Star.EntryLoader.headerTagAndClassName = ['h2','public_article'];
+: block pagejs -> { }
+</script>
+</body>
+</html>
+
+
+

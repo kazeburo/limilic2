@@ -1,0 +1,45 @@
+: cascade base
+
+: around content -> {
+
+<h3 class="account_title">OpenIDでテキストを共有できます</h3>
+
+<div class="about">
+
+<dl>
+<dt class="about_title" style="background-image: url('<: $c.req.uri_for('/static/images/limilic_create_img.png') :>')"><span>新規作成</span></dt>
+<dd class="about_text">OpenIDで認証してエントリーを新規作成します</dd>
+</dl>
+
+<dl>
+<dt class="about_title" style="background-image: url('<: $c.req.uri_for('/static/images/limilic_share_img.png') :>');"><span>共有</span></dt>
+<dd class="about_text">エントリーにはOpenIDで閲覧と編集に制限かけることができます</dd>
+</dl>
+
+<dl>
+<dt class="about_title" style="background-image: url('<: $c.req.uri_for('/static/images/limilic_history_img.png') :>');"><span>変更履歴</span></dt>
+<dd class="about_text">編集履歴もあるので、コラボレーションにも活用できます</dd>
+</dl>
+<div class="clr"></div>
+</div>
+
+
+<h3 class="account_title">新着エントリー</h3>
+
+: for $articles -> $article {
+: include entry_body;
+: }
+
+<p class="pagenate">
+: my $offset = $c.req.param('offset') || 0;
+: if $offset >= 10 {
+<a href="<: $c.req.uri_for('/', [ 'offset' => ($offset - 10) ] ) :>">Prev</a>
+: }
+: if $next {
+<a href="<: $c.req.uri_for('/', [ 'offset' => ($offset + 10) ] ) :>">Next</a>
+: }
+</p>
+
+: }
+
+
