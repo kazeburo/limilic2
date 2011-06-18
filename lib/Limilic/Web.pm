@@ -143,13 +143,19 @@ filter 'entry' => sub {
             HTTP::Exception->throw(403);
         }
         $c->stash->{article} = $article;
+        $c->stash->{article_comment} =  $self->data->retrieve_article_comment( article_id => $article->{id} );
+        
         $app->($self,$c);
     };
 };
 
 get '/' => [qw/session/] => sub {
     my ( $self, $c )  = @_;
-    $c->render('index.tx');
+    my $offset = $c->req->param('offset') || 0;
+    my $rows = $self->data->recent_articles( offset => $offset );
+    my $next;
+    $next = pop @$rows if @$rows > 10;
+    $c->render('index.tx', { articles => $rows, next => $next } );
 };
 
 get '/feed' => sub {
@@ -224,6 +230,11 @@ post '/logout' => [qw/session postkey/] => sub {
 
 get '/account' => [qw/session user/] => sub {
     my ( $self, $c )  = @_;
+    my $offset = $c->req->param('offset') || 0;
+    my $rows = $self->data->user_articles( user_id => $c->stash->{user}->{id}, offset => $offset );
+    my $next;
+    $next = pop @$rows if @$rows > 10;
+    $c->render('account.tx', { articles => $rows, next => $next } );
 };
 
 post '/account/preview' => [qw/session postkey user/] => sub {
@@ -312,14 +323,79 @@ get '/entry/{rid:[a-z0-9]{16}}' => [qw/session entry/] => sub {
 
 get '/entry/{rid:[a-z0-9]{16}}/edit' => [qw/session entry/] => sub {
     my ( $self, $c )  = @_;
+
+    if ( !$c->stash->{article}->{can_modify}->($c->stash->{user}) ) {
+        HTTP::Exception->throw(403);
+    }
+
+    for my $col ( qw/title body acl_view_mode acl_modify_mode anonymous/ ) {
+        $c->req->parameters->add($col, $c->stash->{article}->{$col});
+    }
+    $c->req->parameters->add('acl_custom_view_openid',
+                             map { $_->{openid} } 
+                                 @{$self->data->article_acl_view( article_id => $c->stash->{article}->{id})}); 
+    $c->req->parameters->add('acl_custom_modify_openid',
+                             map { $_->{openid} } 
+                                 @{$self->data->article_acl_modify( article_id => $c->stash->{article}->{id})}); 
+
+    my $user_networks = $self->data->retrieve_user_networks( user_id => $c->stash->{user}->{id} );
+    my $article_histories = $self->data->article_histories( article_id => $c->stash->{article}->{id} );
+    $c->render('edit.tx',{
+        user_networks => $user_networks,
+        article_histories => $article_histories,
+    });
 };
 
 post '/entry/{rid:[a-z0-9]{16}}/edit' => [qw/session postkey entry/] => sub {
     my ( $self, $c )  = @_;
+    if ( !$c->stash->{article}->{can_modify}->($c->stash->{user}) ) {
+        HTTP::Exception->throw(403);
+    }
+    my $validator_key = $c->stash->{article}->{user_id} == $c->stash->{user}->{id} ? 'edit' : 'edit_limited';
+    my $form = $self->validator->validate($c->req,$validator_key);
+    if ( $form->has_error ) {
+        my $user_networks = $self->data->retrieve_user_networks( user_id => $c->stash->{user}->{id} );
+        my $article_histories = $self->data->article_histories( article_id => $c->stash->{article}->{id} );
+        return $c->render('edit.tx',{
+            user_networks => $user_networks,
+            article_histories => $article_histories,
+            form => $form,
+        });
+    }
+
+    if ( $validator_key eq 'edit_limited' ) {
+        $self->data->update_article_body(
+            id => $c->stash->{article}->{id}, 
+            title => $c->req->param('title'),
+            body => $c->req->param('body'),
+            openid => $c->stash->{user}->{openid},
+        );
+    }
+    else {
+        $self->data->update_article(
+            id => $c->stash->{article}->{id}, 
+            title => $c->req->param('title'),
+            body => $c->req->param('body'),
+            acl_view_mode => $c->req->param('acl_view_mode'),
+            acl_modify_mode => $c->req->param('acl_modify_mode'),
+            anonymous => $c->req->param('anonymous'),
+            acl_custom_view_openid => [$c->req->param('acl_custom_view_openid')],
+            acl_custom_modify_openid => [$c->req->param('acl_custom_modify_openid')],
+            openid => $c->stash->{user}->{openid},
+            user_id => $c->stash->{user}->{id},
+        );
+    }
+
+    $c->res->redirect($c->req->uri_for('/entry/'.$c->stash->{article}->{rid}));
 };
 
 post '/entry/{rid:[a-z0-9]{16}}/delete' => [qw/session postkey entry/] => sub {
     my ( $self, $c )  = @_;
+    if ( !$c->stash->{article}->{can_modify}->($c->stash->{user}) ) {
+        HTTP::Exception->throw(403);
+    }
+    $self->data->delete_article(id => $c->stash->{article}->{id});
+    $c->res->redirect($c->req->uri_for('/account'));
 };
 
 post '/entry/{rid:[a-z0-9]{16}}/add_comment' => [qw/session postkey entry/] => sub {

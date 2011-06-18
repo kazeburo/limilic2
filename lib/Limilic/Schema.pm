@@ -8,6 +8,7 @@ use Net::OpenID::Consumer;
 use YAML;
 use String::Random;
 use Text::Xatena;
+use Text::Diff;
 use DateTime;
 use DateTime::Format::Strptime;
 use Mouse::Util::TypeConstraints;
@@ -86,7 +87,6 @@ __PACKAGE__->query(
     q{UPDATE users SET identity = ? WHERE openid = ?}
 );
 
-
 __PACKAGE__->select_all(
     'retrieve_user_networks',
     user_id => 'Uint',
@@ -102,7 +102,8 @@ sub inflate_article {
     $row->{converted_body} = $thx->format($row->{body});
 
     $row->{user} = $self->retrieve_user( id => $row->{user_id} );
-    
+    $row->{total_comments} = $self->select_one(q{SELECT COUNT(*) FROM comments WHERE article_id = ?}, $row->{id});
+
     $row->{can_modify} = sub {
         my $user = shift;
         return if ! $user;
@@ -157,6 +158,106 @@ __PACKAGE__->select_row(
     \&inflate_article
 );
 
+__PACKAGE__->query(
+    'delete_article',
+    id => 'Uint',
+    q{DELETE FROM articles WHERE id=?},
+);
+
+__PACKAGE__->select_all(
+    'recent_articles',
+    'offset' => { isa => 'Uint', default => 0 },
+    q{SELECT * FROM articles WHERE acl_view_mode = 1 ORDER BY id DESC LIMIT ?,11},
+    \&inflate_article
+);
+
+__PACKAGE__->select_all(
+    'user_articles',
+    'user_id' => 'Uint',
+    'offset' => { isa => 'Uint', default => 0 },
+    q{SELECT * FROM articles WHERE user_id = ? ORDER BY id DESC LIMIT ?,11},
+    \&inflate_article
+);
+
+__PACKAGE__->select_all(
+    'article_acl_view',
+    'article_id' => 'Uint',
+    q{SELECT * FROM article_acl_view WHERE article_id = ?},
+);
+
+__PACKAGE__->select_all(
+    'article_acl_modify',
+    'article_id' => 'Uint',
+    q{SELECT * FROM article_acl_modify WHERE article_id = ?},
+);
+
+__PACKAGE__->select_all(
+    'article_histories',
+    'article_id' => 'Uint',
+    q{SELECT * FROM article_history WHERE article_id = ? ORDER BY id DESC LIMIT 10},
+    sub {
+        my ($row, $self) = @_;
+        $row->{updated_on} = $DTFMT->parse_datetime($row->{updated_on});
+        $row->{updated_on}->set_time_zone("Asia/Tokyo");
+    }
+);
+
+sub inflate_comment {
+    my ($row, $self) = @_;
+
+    $row->{created_on} = $DTFMT->parse_datetime($row->{created_on});
+    $row->{created_on}->set_time_zone("Asia/Tokyo");
+    my $thx = Text::Xatena->new;
+    $row->{converted_body} = $thx->format($row->{body});
+
+    $row->{can_delete} = sub {
+        my $user = shift;
+        return if ( !$user );
+        
+        # writer
+        return 1 if $row->{openid} eq $user->{openid};
+
+        # article owner
+        return 1 if $row->{user_id} == $user->{id};
+
+        return;
+    };
+}
+
+__PACKAGE__->select_all(
+    'retrieve_article_comment',
+    article_id => 'Uint',
+    q{SELECT comments.*,articles.user_id FROM comments, articles
+ WHERE comments.article_id = articles.id AND comments.article_id=? ORDER BY comments.created_on},
+    \&inflate_comment,
+);
+
+__PACKAGE__->select_row(
+    'retrieve_comment',
+    id => 'Uint',
+    q{SELECT comments.*,articles.user_id FROM comments, articles
+ WHERE comments.article_id = articles.id AND comments.id=?},
+    \&inflate_comment,
+);
+
+__PACKAGE__->query(
+    'add_comment',
+    article_id => 'Uint',
+    openid => 'Str',
+    body => 'Str',
+    created_on => {
+        isa => 'DateTime',
+        default => sub { DateTime->now( time_zone=>'Asia/Tokyo' ) },
+        deflater => sub { $DTFMT->format_datetime(shift) },
+    },
+    q{INSERT INTO comments (article_id, openid, body, created_on) VALUES (?, ?, ?, ?)}
+);
+
+__PACKAGE__->query(
+    'delete_comment',
+    id => 'Uint',
+    q{DELETE FROM comments WHERE id = ?},
+);
 
 sub login_openid_user {
     my $self = shift;
@@ -253,6 +354,95 @@ sub create_article {
     $args->{rid};
 }
 
+
+sub update_article_body {
+    my $self = shift;
+    my $args = $self->args(
+        id => 'Uint',
+        title => 'Str',
+        body => 'Str',
+        openid => 'Str',
+    );
+
+    my $txn = $self->txn_scope;
+    my $article = $self->retrieve_article(id => $args->{id}) or creak('article not found');
+    $self->query(
+        'UPDATE articles SET title = ?, body = ? WHERE id = ?',
+        $args->{title}, $args->{body}, $args->{id});
+    $self->add_article_history(
+        article_id => $args->{id},
+        openid => $args->{openid},
+        previous_body => $article->{body},
+        body => $args->{body},
+    );
+    
+    $txn->commit;
+}
+
+sub add_article_history {
+    my $self = shift;
+    my $args = $self->args(
+        article_id => 'Uint',
+        openid => 'Str',
+        previous_body => 'Str',
+        body => 'Str',
+    );
+    my $previous = $args->{previous_body};
+    my $body = $args->{body};
+    my $diff = Text::Diff::diff( \$previous, \$body );
+    my $thx = Text::Xatena->new;
+    my $converted_diff = $thx->format(<<"EOF");
+>||
+$diff
+||<
+EOF
+    $self->query(
+        'INSERT INTO article_history ( article_id, openid, previous_body, converted_diff ) VALUES (?, ?, ?, ?)',
+        $args->{article_id}, $args->{openid}, $previous, $converted_diff
+    );
+}
+
+sub update_article {
+    my $self = shift;
+    my $args = $self->args(
+        id => 'Uint',
+        title => 'Str',
+        body => 'Str',
+        acl_view_mode => 'Uint',
+        acl_modify_mode => 'Uint',
+        anonymous => 'Uint',
+        acl_custom_view_openid => 'ArrayRef[Str]',
+        acl_custom_modify_openid => 'ArrayRef[Str]',
+        openid => 'Str',
+        user_id => 'Uint',
+    );
+
+    my $txn = $self->txn_scope;
+    my $article = $self->retrieve_article(id => $args->{id}) or creak('article not found');
+    $self->query(
+        'UPDATE articles SET title=?, body=?, acl_view_mode=?, acl_modify_mode=?, anonymous=?  WHERE id=?',
+        $args->{title}, $args->{body}, $args->{acl_view_mode}, $args->{acl_modify_mode}, $args->{anonymous}, $args->{id});
+
+    $self->query(q{DELETE FROM article_acl_view WHERE article_id = ?}, $args->{id});
+    for my $openid ( @{$args->{acl_custom_view_openid}} ) {
+        $self->query(q{INSERT INTO article_acl_view (article_id,openid, user_id) VALUES (?,?,?)},
+                     $args->{id}, $openid, $args->{user_id});
+    }
+    $self->query(q{DELETE FROM article_acl_modify WHERE article_id = ?}, $args->{id});
+    for my $openid ( @{$args->{acl_custom_modify_openid}} ) {
+        $self->query(q{INSERT INTO article_acl_modify (article_id,openid, user_id) VALUES (?,?,?)},
+                     $args->{id}, $openid, $args->{user_id});
+    }
+
+    $self->add_article_history(
+        article_id => $args->{id},
+        openid => $args->{openid},
+        previous_body => $article->{body},
+        body => $args->{body},
+    );
+
+    $txn->commit;
+}
 
 1;
 

@@ -27,7 +27,7 @@
 <h3 class="account_title">新着エントリー</h3>
 
 : for $articles -> $article {
-: include entry_body;
+: include entry_body { article => $article }
 : }
 
 <p class="pagenate">

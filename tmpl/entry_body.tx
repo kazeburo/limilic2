@@ -4,8 +4,9 @@
 
 <div class="article_date">
 created on <span><a href="<: $c.req.uri_for('/entry/' ~ $article.rid) :>"><: $article.created_on.ymd :> <: $article.created_on.hms :></a></span>
-: if ( $article.can_modify($c.stash.user) ) {
- | <a href="<: $c.req.uri_for('/edit',[ id => $article.id ]) :>">編集</a>
+: my $can_modify = $article.can_modify;
+: if ( $can_modify($c.stash.user) ) {
+ | <a href="<: $c.req.uri_for('/entry/'~$article.rid~'/edit') :>">編集</a>
 : }
  | <a href="<: $c.req.uri_for('/entry/' ~ $article.rid) :>#comment">コメント(<: $article.total_comments || 0 :>)</a>
  | <a href="http://b.hatena.ne.jp/entry/<: $c.req.uri_for('/entry/'~$article.rid) :>"><img src="<: $c.req.uri_for('/static/images/b_entry.gif') :>" width="16" height="12" style="border: 0 none;" alt="このエントリーを含むはてなブックマーク" title="このエントリーを含むはてなブックマーク" /></a> <a href="http://b.hatena.ne.jp/entry/<: $c.req.uri_for('/entry/' ~ $article.rid) :>"><img src="http://b.hatena.ne.jp/entry/image/<: $c.req.uri_for('/entry/' ~ $article.rid) :>" alt="" /></a>

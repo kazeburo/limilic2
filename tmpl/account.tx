@@ -1,0 +1,26 @@
+: cascade base
+
+: around content -> {
+
+<h3 class="account_title"><: $c.stash.user.identity.display :>さんが書いた記事</h3>
+
+: if ( $articles.size() ) == 0 {
+<p class="no_artciles_warning">記事がありません。<br />
+記事の作成は<a href="<: $c.req.uri_for('/create') :>">こちら</a>から</p>
+: }
+
+: for $articles -> $article {
+: include entry_body { article => $article }
+: }
+
+<p class="pagenate">
+: my $offset = $c.req.param('offset') || 0;
+: if $offset >= 10 {
+<a href="<: $c.req.uri_for('/account', [ 'offset' => ($offset - 10) ] ) :>">Prev</a>
+: }
+: if $next {
+<a href="<: $c.req.uri_for('/account', [ 'offset' => ($offset + 10) ] ) :>">Next</a>
+: }
+</p>
+
+: }

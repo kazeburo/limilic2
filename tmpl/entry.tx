@@ -26,7 +26,7 @@ posted by <span><a href="<: $comment.openid :>"><: $comment.openid :></a></span>
 <h3 id="article_add_comment">コメントを投稿</h3>
 : if ( $c.stash.user.id ) {
 : block form |  fillinform( $c.req ) -> {
-<form action="<: $c.req.uri_for('/entry/'~$article.rid~'/add_comment') :>" method="post" id="add_comment">
+<form action="<: $c.req.uri_for('/entry/'~$c.stash.article.rid~'/add_comment') :>" method="post" id="add_comment">
 
 : if ( $form.has_error ) {
 <ul class="dfv_err">

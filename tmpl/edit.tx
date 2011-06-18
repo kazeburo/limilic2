@@ -1,0 +1,181 @@
+: cascade base
+
+: around content -> {
+: block form |  fillinform( $c.req ) -> {
+<form action="<: $c.req.uri_for('/entry/'~$c.stash.article.rid~'/edit') :>" method="post" id="create">
+<input type="hidden" id="postkey" name="postkey" value="<: $c.stash.session.get('postkey') :>" />
+
+: if ( $form.has_error ) {
+<ul class="dfv_err">
+: for $form.messages -> $message {
+<li><: $message :></li>
+: }
+</ul>
+: }
+
+<fieldset>
+
+<h3>編集</h3>
+
+<div class="article_title_wrap"><input type="text" size="10" name="title" id="article_title_input" /></div>
+
+<ul class="mtab">
+<li><span class="article_body_tab_menu" id="article_tab_edit">本文</span></li><li><span class="article_body_tab_menu" id="article_tab_preview">プレビュー</span></li>
+</ul>
+
+<div class="mtab_body">
+<div class="mtab_body_content" id="article_tab_edit_content">
+<textarea name="body" rows="20" cols="90" id="article_body_edit_area"></textarea>
+</div>
+<div class="mtab_body_content" id="article_tab_preview_content" style="display:none;">
+<div id="article_body_preview_area" class="entry"> </div>
+</div>
+</div>
+<p>*一部の記法を除いて、<a href="http://hatenadiary.g.hatena.ne.jp/keyword/%e3%81%af%e3%81%a6%e3%81%aa%e8%a8%98%e6%b3%95%e4%b8%80%e8%a6%a7">はてな記法</a>が使えます</p>
+
+</fieldset>
+
+: if ( $c.stash.user.id == $c.stash.article.user_id ) { #owner
+
+<fieldset>
+
+<h3>共有</h3>
+
+<ul class="mtab">
+<li><span class="acl_tab_menu" id="acl_tab_view">閲覧設定</span></li><li><span class="acl_tab_menu" id="acl_tab_modify">編集設定</span></li><li><span class="acl_tab_menu" id="acl_tab_anonymous">ID表示</span></li>
+</ul>
+
+<div class="mtab_body">
+
+<div class="mtab_body_content" id="acl_tab_view_content">
+
+<ul class="acl_mode_list">
+<li><label><input type="radio" name="acl_view_mode" value="1" /> 全員</label></li>
+<li><label><input type="radio" name="acl_view_mode" value="2" /> 自分のみ</label></li>
+<li><label><input type="radio" name="acl_view_mode" value="3" /> 以下のOpenID</label></li>
+</ul>
+
+<div class="acl_custom_wrap" id="acl_view_custom">
+<div class="acl_custom_select_wrap" id="acl_view_custom_wrap">
+<ul>
+: for $user_networks -> $user_network {
+<li><label><input type="checkbox" name="acl_custom_view_openid" value="<: $user_network.openid :>" /> <: $user_network.openid :></label></li>
+: }
+</ul>
+: if ( $user_networks.size() == 0 ) {
+<p class="no_custom_warning">下のフォームからOpenIDを入力してください</p>
+: }
+</div>
+
+<div class="acl_custom_add_wrap">
+<div class="acl_custom_add_button_wrap"><input type="button" value="追加" id="acl_view_custom_add_button" /></div>
+<div class="acl_custom_add_text_wrap"><input type="text" size="10" name="acl_view_custom_add_text" id="acl_view_custom_add_text" /></div>
+<div class="clr"></div>
+</div>
+
+</div>
+</div>
+
+<div class="mtab_body_content" id="acl_tab_modify_content">
+
+<ul class="acl_mode_list">
+<li><label><input type="radio" name="acl_modify_mode" value="2" /> 自分のみ</label></li>
+<li><label><input type="radio" name="acl_modify_mode" value="3" /> 以下のOpenID</label></li>
+<li><label><input type="radio" name="acl_modify_mode" value="4" /> OpenIDで認証された全員</label></li>
+</ul>
+
+<div class="acl_custom_wrap" id="acl_modify_custom">
+<div class="acl_custom_select_wrap" id="acl_modify_custom_wrap">
+<ul>
+: for $user_networks -> $user_network {
+<li><label><input type="checkbox" name="acl_custom_modify_openid" value="<: $user_network.openid :>" /> <: $user_network.openid :></label></li>
+: }
+</ul>
+: if ( $user_networks.size() == 0 ) {
+<p class="no_custom_warning">下のフォームからOpenIDを入力してください</p>
+: }
+</div>
+
+<div class="acl_custom_add_wrap">
+<div class="acl_custom_add_button_wrap"><input type="button" value="追加" id="acl_modify_custom_add_button" /></div>
+<div class="acl_custom_add_text_wrap"><input type="text" size="10" name="acl_modify_custom_add_text" id="acl_modify_custom_add_text" /></div>
+<div class="clr"></div>
+</div>
+</div>
+
+</div>
+
+<div class="mtab_body_content" id="acl_tab_anonymous_content">
+<ul class="acl_mode_list">
+<li><label><input type="radio" name="anonymous" value="0" /> 表示する</label></li>
+<li><label><input type="radio" name="anonymous" value="1" /> 表示しない</label></li>
+</ul>
+</div>
+
+
+</div>
+
+</fieldset>
+: }
+
+
+<fieldset>
+
+<h3>編集履歴</h3>
+
+: if ( $article_histories.size() ) {
+<table class="histories">
+<tr>
+<th class="histories_modify">変更時間</th>
+<th>変更者 OpenID</th>
+</tr>
+: for $article_histories -> $history { 
+<tr>
+<td class="histories_modify" id="article_history_<: $~history.count :>" nowrap><: $history.updated_on.ymd :> <: $history.updated_on.hms :></td>
+<td><: $history.openid :></td>
+</tr>
+<tr>
+<td colspan="2" id="article_history_diff_<: $~history.count :>" class="entry" style="background-color: #eee; display: none"><: $history.converted_diff | mark_raw :></td>
+</tr>
+: }
+</table>
+
+: } else {
+<p>編集履歴がありません</p>
+: }
+</fieldset>
+
+
+
+<div id="article_page_submit">
+<a href="<: $c.req.uri_for('/entry/'~$c.stash.article.rid) :>" style="margin-right: 4px;">&lt;戻る</a>
+<input value="完 了" type="submit">
+</div>
+
+<input value="" name="id" type="hidden">
+</form>
+:} # fillin
+
+<form action="<: $c.req.uri_for('/entry/'~$c.stash.article.rid~'/delete') :>" method="post" id="article_delete" onsubmit="return confirm('削除しますか？')">
+<input type="hidden" id="postkey" name="postkey" value="<: $c.stash.session.get('postkey') :>" />
+<input type="submit" value="削除">
+<input value="" name="id" type="hidden">
+</form>
+
+: }
+
+: around pagejs -> {
+new Cpip.tabPreview( 'article_tab_preview', 'article_body_edit_area', 'article_body_preview_area' );
+new Cpip.tabCtrl('article_body_tab_menu');
+: if ( $c.stash.user.id == $c.stash.article.user_id ) { #owner
+new Cpip.aclCustom('view');
+new Cpip.aclCustom('modify');
+new Cpip.tabCtrl('acl_tab_menu');
+: }
+: for $article_histories -> $history {
+new Cpip.articleHistoryDiff(<: $~history.count :>);
+: }
+: }
+
+
+
