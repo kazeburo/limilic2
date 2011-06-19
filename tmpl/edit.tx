@@ -3,7 +3,7 @@
 : around content -> {
 : block form |  fillinform( $c.req ) -> {
 <form action="<: $c.req.uri_for('/entry/'~$c.stash.article.rid~'/edit') :>" method="post" id="create">
-<input type="hidden" id="postkey" name="postkey" value="<: $c.stash.session.get('postkey') :>" />
+<input type="hidden" id="postkey" name="postkey" value="<: $c.stash.session.postkey :>" />
 
 : if ( $form.has_error ) {
 <ul class="dfv_err">
@@ -157,7 +157,7 @@
 :} # fillin
 
 <form action="<: $c.req.uri_for('/entry/'~$c.stash.article.rid~'/delete') :>" method="post" id="article_delete" onsubmit="return confirm('削除しますか？')">
-<input type="hidden" id="postkey" name="postkey" value="<: $c.stash.session.get('postkey') :>" />
+<input type="hidden" id="postkey" name="postkey" value="<: $c.stash.session.postkey :>" />
 <input type="submit" value="削除">
 <input value="" name="id" type="hidden">
 </form>

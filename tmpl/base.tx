@@ -14,13 +14,13 @@
 <div class="welcome">
 : if ( $c.stash.user ) {
 <form id="openid_form" action="<: $c.req.uri_for('/logout') :>" method="post">
-<input type="hidden" id="postkey" name="postkey" value="<: $c.stash.session.get('postkey') :>" />
+<input type="hidden" id="postkey" name="postkey" value="<: $c.stash.session.postkey :>" />
 <ul>
 <li><a href="<: $c.stash.user.identity.url :>" class="identity"><: $c.stash.user.identity.display :></a></li>
 <li><a href="<: $c.req.uri_for('/') :>">トップ</a></li>
 <li><a href="<: $c.req.uri_for('/account') :>">一覧</a></li>
 <li><a href="<: $c.req.uri_for('/create') :>">新規作成</a></li>
-<li><input type="submit" id="openid_url_submit" name="openid_url_submit" value="ログアウト" /></li>
+<li><input type="submit" id="openid_url_submit" name="openid_url_submit" value=" ログアウト " style="border: solid 1px #999; background-color: #ccc; padding: 0px; cursor: pointer; border-radius: 0px; -webkit-border-radius: 2px; -moz-border-radius: 2px; color: #666" /></li>
 </ul>
 </form>
 : } else { # if stash.user
@@ -28,7 +28,7 @@
 <label>OpenID URL</label>
 <input type="text" id="openid_url" name="openid_url" value="" />
 <input type="hidden" id="n" name="n" value="<: $c.req.uri :>" />
-<input type="hidden" id="postkey" name="postkey" value="<: $c.stash.session.get('postkey') :>" />
+<input type="hidden" id="postkey" name="postkey" value="<: $c.stash.session.postkey :>" />
 <input type="submit" id="openid_url_submit" name="openid_url_submit" value="ログイン" />
 </form>
 : }

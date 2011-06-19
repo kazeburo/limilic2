@@ -3,7 +3,7 @@
 : around content -> {
 : block form |  fillinform( $c.req ) -> {
 <form action="<: $c.req.uri_for('/create') :>" method="post" id="create">
-<input type="hidden" id="postkey" name="postkey" value="<: $c.stash.session.get('postkey') :>" />
+<input type="hidden" id="postkey" name="postkey" value="<: $c.stash.session.postkey :>" />
 
 : if ( $form.has_error ) {
 <ul class="dfv_err">

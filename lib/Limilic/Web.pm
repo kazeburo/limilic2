@@ -1,7 +1,6 @@
 package Limilic::Web;
 
 use Shirahata3;
-use Limilic::Session;
 use Limilic::Schema;
 use Limilic::Validator;
 use Cache::Memcached::Fast;
@@ -11,7 +10,6 @@ use LWPx::ParanoidAgent;
 use Scope::Container::DBI;
 use DBIx::Sunny;
 use Digest::SHA qw/sha1_base64/;
-use Text::Xatena;
 
 sub data {
     my $self = shift;
@@ -25,7 +23,6 @@ sub memcached {
     if ( !$self->{_memcached} ) {
         $self->{_memcached} = Cache::Memcached::Fast->new({
             servers => [qw/127.0.0.1:11211/],
-            ketama_points => 150,
             utf8 => 1,
         });
     }
@@ -49,8 +46,7 @@ filter 'session' => sub {
     my $app = shift;
     sub {
         my ( $self, $c )  = @_;
-        my $session = Limilic::Session->new;
-        $c->stash->{session} = $session;
+        $c->stash->{session} = {};
         my $sid = (sub {
             my $id = $c->req->cookies->{'lmlc'};
             return unless $id;
@@ -64,14 +60,14 @@ filter 'session' => sub {
                 return;
             }
 
-            $session->init($ret);
+            $c->stash->{session} = $ret;
 
-            if ( $session->get('id') ) {
+            if ( $ret->{id} ) {
                 my $user = eval {
-                    $self->data->retrieve_user( id => $session->get('id') );
+                    $self->data->retrieve_user( id => $ret->{id} );
                 };
                 if ( !$user ) {
-                    $session->init({});
+                    $c->stash->{session} = {};
                     $self->memcached->delete($id);
                     return;
                 }
@@ -80,14 +76,14 @@ filter 'session' => sub {
             $id;
         })->();
 
-        if ( !$session->get('postkey') ) {
+        if ( !$c->stash->{session}->{postkey} ) {
             my $postkey = sha1_base64( time . [] . $$ . rand() );
-            $session->set('postkey', $postkey );
+            $c->stash->{session}->{postkey} = $postkey;
         }
 
         my $res = $app->($self,$c);
 
-        if ( $session->logout ) {
+        if ( ! keys %{$c->stash->{session}} ) {
             $self->memcached->delete($sid) if $sid;
             $res->cookies->{'lmlc'} = {
                 value => '0',
@@ -95,9 +91,9 @@ filter 'session' => sub {
                 expires => time - 3600*24*7
             };            
         }
-        elsif ( $session->modified ) {
+        else {
             $sid ||= sha1_base64( time . [] . $$ . rand() );
-            $self->memcached->set($sid, $session->params);
+            $self->memcached->set($sid, $c->stash->{session});
             $res->cookies->{'lmlc'} = {
                 value => $sid,
                 path => '/',
@@ -112,7 +108,7 @@ filter 'postkey' => sub {
     my $app = shift;
     sub {
         my ( $self, $c )  = @_;
-        if ( !$c->req->param('postkey') || $c->stash->{session}->get('postkey') ne 
+        if ( !$c->req->param('postkey') || $c->stash->{session}->{postkey} ne 
                  $c->req->param('postkey') ) {
             HTTP::Exception->throw(403);
         }
@@ -145,6 +141,17 @@ filter 'entry' => sub {
         $c->stash->{article} = $article;
         $c->stash->{article_comment} =  $self->data->retrieve_article_comment( article_id => $article->{id} );
         
+        $app->($self,$c);
+    };
+};
+
+filter 'modify_entry' => sub {
+    my $app = shift;
+    sub {
+        my ( $self, $c )  = @_;
+        if ( !$c->stash->{article}->{can_modify}->($c->stash->{user}) ) {
+            HTTP::Exception->throw(403);
+        }
         $app->($self,$c);
     };
 };
@@ -212,7 +219,7 @@ get '/login' => [qw/session/] => sub {
                 openid => $identity->{identity},
                 identity => $identity,
             );
-            $c->stash->{session}->set('id',$user->{id});
+            $c->stash->{session}->{id} = $user->{id};
         } else {
             croakf($csr->err);
         }
@@ -224,7 +231,7 @@ get '/login' => [qw/session/] => sub {
 
 post '/logout' => [qw/session postkey/] => sub {
     my ( $self, $c )  = @_;
-    $c->stash->{session}->logout(1);
+    $c->stash->{session} = {};
     $c->res->redirect('/');
 };
 
@@ -239,8 +246,7 @@ get '/account' => [qw/session user/] => sub {
 
 post '/account/preview' => [qw/session postkey user/] => sub {
     my ( $self, $c )  = @_;
-    my $thx = Text::Xatena->new;
-    $thx->format($c->req->param('body') || ' ');
+    $self->data->convert_body($c->req->param('body'));
 };
 
 post '/account/network' => [qw/session postkey user/] => sub {
@@ -318,15 +324,15 @@ post '/create' => [qw/session postkey user/] => sub {
 
 get '/entry/{rid:[a-z0-9]{16}}' => [qw/session entry/] => sub {
     my ( $self, $c )  = @_;
-    $c->render('entry.tx');
+    $c->render('entry.tx',{
+        article_comments => $self->data->retrieve_article_comment(
+            article_id => $c->stash->{article}->{id}
+        ),
+    });
 };
 
-get '/entry/{rid:[a-z0-9]{16}}/edit' => [qw/session entry/] => sub {
+get '/entry/{rid:[a-z0-9]{16}}/edit' => [qw/session entry modify_entry/] => sub {
     my ( $self, $c )  = @_;
-
-    if ( !$c->stash->{article}->{can_modify}->($c->stash->{user}) ) {
-        HTTP::Exception->throw(403);
-    }
 
     for my $col ( qw/title body acl_view_mode acl_modify_mode anonymous/ ) {
         $c->req->parameters->add($col, $c->stash->{article}->{$col});
@@ -346,11 +352,8 @@ get '/entry/{rid:[a-z0-9]{16}}/edit' => [qw/session entry/] => sub {
     });
 };
 
-post '/entry/{rid:[a-z0-9]{16}}/edit' => [qw/session postkey entry/] => sub {
+post '/entry/{rid:[a-z0-9]{16}}/edit' => [qw/session postkey entry modify_entry/] => sub {
     my ( $self, $c )  = @_;
-    if ( !$c->stash->{article}->{can_modify}->($c->stash->{user}) ) {
-        HTTP::Exception->throw(403);
-    }
     my $validator_key = $c->stash->{article}->{user_id} == $c->stash->{user}->{id} ? 'edit' : 'edit_limited';
     my $form = $self->validator->validate($c->req,$validator_key);
     if ( $form->has_error ) {
@@ -389,21 +392,47 @@ post '/entry/{rid:[a-z0-9]{16}}/edit' => [qw/session postkey entry/] => sub {
     $c->res->redirect($c->req->uri_for('/entry/'.$c->stash->{article}->{rid}));
 };
 
-post '/entry/{rid:[a-z0-9]{16}}/delete' => [qw/session postkey entry/] => sub {
+post '/entry/{rid:[a-z0-9]{16}}/delete' => [qw/session postkey entry modify_entry/] => sub {
     my ( $self, $c )  = @_;
-    if ( !$c->stash->{article}->{can_modify}->($c->stash->{user}) ) {
-        HTTP::Exception->throw(403);
-    }
     $self->data->delete_article(id => $c->stash->{article}->{id});
     $c->res->redirect($c->req->uri_for('/account'));
 };
 
-post '/entry/{rid:[a-z0-9]{16}}/add_comment' => [qw/session postkey entry/] => sub {
+post '/entry/{rid:[a-z0-9]{16}}/comment' => [qw/session postkey entry/] => sub {
     my ( $self, $c )  = @_;
+    my $form = $self->validator->validate($c->req,'entry/comment');
+    if ( $form->has_error ) {
+        return $c->render('entry.tx', {
+            form => $form,
+            article_comments => $self->data->retrieve_article_comment(
+                article_id => $c->stash->{article}->{id}
+            ),
+        });
+    }
+    $self->data->add_comment(
+        article_id => $c->stash->{article}->{id},
+        openid => $c->stash->{user}->{openid},
+        body => $c->req->param('body'),
+    );
+    $c->res->redirect($c->req->uri_for('/entry/'.$c->stash->{article}->{rid}));
 };
 
-post '/entry/{rid:[a-z0-9]{16}}/delete_comment' => [qw/session postkey entry/] => sub {
+post '/entry/{rid:[a-z0-9]{16}}/comment/{cid:[0-9]+}/delete' => [qw/session postkey entry/] => sub {
     my ( $self, $c )  = @_;
+
+    my $comment = $self->data->retrieve_comment(
+        id => $c->args->{cid},
+        article_id => $c->stash->{article}->{id}
+    );
+warn $c->args->{cid};
+
+    HTTP::Exception->throw(404) if ( !$comment );
+    if ( !$comment->{can_delete}->($c->stash->{user}) ) {
+        HTTP::Exception->throw(403);
+    }
+
+    $self->data->delete_comment(id => $comment->{id} );
+    $c->res->redirect($c->req->uri_for('/entry/'.$c->stash->{article}->{rid}));
 };
 
 1;

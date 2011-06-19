@@ -9,11 +9,19 @@
 : for $article_comments -> $comment {
 <div class="comment">
 <div class="comment_sign">
+: my $can_delete = $comment.can_delete;
+: if ( $can_delete($c.stash.user)) {
+<form id="openid_form" action="<: $c.req.uri_for('/entry/'~$c.stash.article.rid~'/comment/'~$comment.id~'/delete') :>" method="post" onsubmit="return confirm('削除しますか？')">
+<input type="hidden" id="postkey" name="postkey" value="<: $c.stash.session.postkey :>" />
+: }
 posted by <span><a href="<: $comment.openid :>"><: $comment.openid :></a></span> | <span><: $comment.created_on.ymd :> <: $comment.created_on.hms :></span>
-<: if ($comment.can_delete($c.stash.user)) { :> | <a href="<: $c.req.uri_for('/entry/delete_comment',[ id => $article.id, comment_id => $comment.id ]) :>">削除</a><: } :>
+: if ( $can_delete($c.stash.user)) {
+| <input type="submit" id="delete_comment_<: $comment.id :>" name="delete_comment" value=" 削除 " style="border: solid 1px #999; background-color: #ccc; padding: 0px;  cursor: pointer; border-radius: 2px; -webkit-border-radius: 2px; -moz-border-radius: 2px; color: #666" />
+</form>
+: }
 </div>
 <div class="comment_body entry">
-<: comment.converted_body :>
+<: $comment.converted_body | mark_raw :>
 </div>
 </div>
 : }
@@ -26,8 +34,8 @@ posted by <span><a href="<: $comment.openid :>"><: $comment.openid :></a></span>
 <h3 id="article_add_comment">コメントを投稿</h3>
 : if ( $c.stash.user.id ) {
 : block form |  fillinform( $c.req ) -> {
-<form action="<: $c.req.uri_for('/entry/'~$c.stash.article.rid~'/add_comment') :>" method="post" id="add_comment">
-
+<form action="<: $c.req.uri_for('/entry/'~$c.stash.article.rid~'/comment') :>" method="post" id="add_comment">
+<input type="hidden" id="postkey" name="postkey" value="<: $c.stash.session.postkey :>" />
 : if ( $form.has_error ) {
 <ul class="dfv_err">
 : for $form.messages -> $message {

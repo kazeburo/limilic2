@@ -24,6 +24,13 @@ my $DTFMT = DateTime::Format::Strptime->new(
     pattern   => '%Y-%m-%d %H:%M:%S',
 );
 
+sub convert_body {
+    my $self = shift;
+    my $body = shift;
+    return if !defined $body;
+    Text::Xatena->new->format($body);
+}
+
 sub inflate_user {
     my $row = shift;
     my $identity = YAML::Load($row->{identity});
@@ -97,9 +104,6 @@ sub inflate_article {
     my ($row, $self) = @_;
     $row->{created_on} = $DTFMT->parse_datetime($row->{created_on});
     $row->{created_on}->set_time_zone("Asia/Tokyo");
-
-    my $thx = Text::Xatena->new;
-    $row->{converted_body} = $thx->format($row->{body});
 
     $row->{user} = $self->retrieve_user( id => $row->{user_id} );
     $row->{total_comments} = $self->select_one(q{SELECT COUNT(*) FROM comments WHERE article_id = ?}, $row->{id});
@@ -207,8 +211,6 @@ sub inflate_comment {
 
     $row->{created_on} = $DTFMT->parse_datetime($row->{created_on});
     $row->{created_on}->set_time_zone("Asia/Tokyo");
-    my $thx = Text::Xatena->new;
-    $row->{converted_body} = $thx->format($row->{body});
 
     $row->{can_delete} = sub {
         my $user = shift;
@@ -235,22 +237,10 @@ __PACKAGE__->select_all(
 __PACKAGE__->select_row(
     'retrieve_comment',
     id => 'Uint',
-    q{SELECT comments.*,articles.user_id FROM comments, articles
- WHERE comments.article_id = articles.id AND comments.id=?},
-    \&inflate_comment,
-);
-
-__PACKAGE__->query(
-    'add_comment',
     article_id => 'Uint',
-    openid => 'Str',
-    body => 'Str',
-    created_on => {
-        isa => 'DateTime',
-        default => sub { DateTime->now( time_zone=>'Asia/Tokyo' ) },
-        deflater => sub { $DTFMT->format_datetime(shift) },
-    },
-    q{INSERT INTO comments (article_id, openid, body, created_on) VALUES (?, ?, ?, ?)}
+    q{SELECT comments.*,articles.user_id FROM comments, articles
+ WHERE comments.article_id = articles.id AND comments.id=? AND comments.article_id = ?},
+    \&inflate_comment,
 );
 
 __PACKAGE__->query(
@@ -330,12 +320,15 @@ sub create_article {
         acl_custom_modify_openid => 'ArrayRef[Str]',
     );
 
+    my $converted_body = $self->converted_body($args->{body});
+
     my $txn = $self->txn_scope;
     $self->query(
         q{INSERT INTO articles 
- (rid, user_id, title, body, acl_view_mode, acl_modify_mode, anonymous, created_on)
+ (rid, user_id, title, body, acl_view_mode, acl_modify_mode, anonymous, created_on, converted_body)
  VALUES (?,?,?,?,?,?,?,?)},
-        map { $args->{$_} } qw/rid user_id title body acl_view_mode acl_modify_mode anonymous created_on/
+        map { $args->{$_} } qw/rid user_id title body acl_view_mode acl_modify_mode anonymous created_on/,
+        $converted_body
     );
 
     my $article_id = $self->last_insert_id;
@@ -364,11 +357,13 @@ sub update_article_body {
         openid => 'Str',
     );
 
+    my $converted_body = $self->converted_body($args->{body});
+
     my $txn = $self->txn_scope;
     my $article = $self->retrieve_article(id => $args->{id}) or creak('article not found');
     $self->query(
-        'UPDATE articles SET title = ?, body = ? WHERE id = ?',
-        $args->{title}, $args->{body}, $args->{id});
+        'UPDATE articles SET title = ?, body = ?, converted_body WHERE id = ?',
+        $args->{title}, $args->{body}, $converted_body, $args->{id});
     $self->add_article_history(
         article_id => $args->{id},
         openid => $args->{openid},
@@ -390,8 +385,7 @@ sub add_article_history {
     my $previous = $args->{previous_body};
     my $body = $args->{body};
     my $diff = Text::Diff::diff( \$previous, \$body );
-    my $thx = Text::Xatena->new;
-    my $converted_diff = $thx->format(<<"EOF");
+    my $converted_diff = $self->convert_body(<<"EOF");
 >||
 $diff
 ||<
@@ -417,11 +411,13 @@ sub update_article {
         user_id => 'Uint',
     );
 
+    my $converted_body = $self->convert_body($args->{body});
+
     my $txn = $self->txn_scope;
     my $article = $self->retrieve_article(id => $args->{id}) or creak('article not found');
     $self->query(
-        'UPDATE articles SET title=?, body=?, acl_view_mode=?, acl_modify_mode=?, anonymous=?  WHERE id=?',
-        $args->{title}, $args->{body}, $args->{acl_view_mode}, $args->{acl_modify_mode}, $args->{anonymous}, $args->{id});
+        'UPDATE articles SET title=?, body=?, converted_body = ?, acl_view_mode=?, acl_modify_mode=?, anonymous=?  WHERE id=?',
+        $args->{title}, $args->{body}, $converted_body, $args->{acl_view_mode}, $args->{acl_modify_mode}, $args->{anonymous}, $args->{id});
 
     $self->query(q{DELETE FROM article_acl_view WHERE article_id = ?}, $args->{id});
     for my $openid ( @{$args->{acl_custom_view_openid}} ) {
@@ -443,6 +439,31 @@ sub update_article {
 
     $txn->commit;
 }
+
+sub add_comment {
+    my $self = shift;
+    my $args = $self->args(
+        article_id => 'Uint',
+        openid => 'Str',
+        body => 'Str',
+        created_on => {
+            isa => 'DateTime',
+            default => sub { $DTFMT->format_datetime(DateTime->now( time_zone=>'Asia/Tokyo' )) },
+        },
+    );
+
+    my $converted_body = $self->convert_body($args->{body});
+
+    $self->query(
+        q{INSERT INTO comments (article_id, openid, body, converted_body, created_on) VALUES (?, ?, ?, ?, ?)},
+        $args->{article_id},
+        $args->{openid},
+        $args->{body},
+        $converted_body,
+        $args->{created_on},
+    );
+}
+
 
 1;
 
