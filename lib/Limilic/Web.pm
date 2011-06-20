@@ -424,7 +424,6 @@ post '/entry/{rid:[a-z0-9]{16}}/comment/{cid:[0-9]+}/delete' => [qw/session post
         id => $c->args->{cid},
         article_id => $c->stash->{article}->{id}
     );
-warn $c->args->{cid};
 
     HTTP::Exception->throw(404) if ( !$comment );
     if ( !$comment->{can_delete}->($c->stash->{user}) ) {

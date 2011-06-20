@@ -8,6 +8,7 @@ use Net::OpenID::Consumer;
 use YAML;
 use String::Random;
 use Text::Xatena;
+use Limilic::Xatena::Inline;
 use Text::Diff;
 use DateTime;
 use DateTime::Format::Strptime;
@@ -28,7 +29,9 @@ sub convert_body {
     my $self = shift;
     my $body = shift;
     return if !defined $body;
-    Text::Xatena->new->format($body);
+    Text::Xatena->new(
+        inline => Limilic::Xatena::Inline->new,
+    )->format($body);
 }
 
 sub inflate_user {
