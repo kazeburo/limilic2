@@ -35,6 +35,7 @@ requires 'LWP::UserAgent';
 requires 'LWP::Protocol::https';
 requires 'LWPx::ParanoidAgent';
 requires 'Scope::Container::DBI';
+requires 'DBD::mysql';
 requires 'Digest::SHA';
 requires 'XML::Feed';
 
