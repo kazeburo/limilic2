@@ -39,6 +39,8 @@ requires 'DBD::mysql';
 requires 'Digest::SHA';
 requires 'XML::Feed';
 requires 'JSON';
+requires 'Starlet';
+requires 'Server::Starter';
 
 tests 't/*.t';
 author_tests 'xt';
