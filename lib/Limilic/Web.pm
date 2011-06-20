@@ -10,6 +10,8 @@ use LWPx::ParanoidAgent;
 use Scope::Container::DBI;
 use DBIx::Sunny;
 use Digest::SHA qw/sha1_base64/;
+use XML::Feed;
+use Encode;
 
 sub data {
     my $self = shift;
@@ -167,6 +169,49 @@ get '/' => [qw/session/] => sub {
 
 get '/feed' => sub {
     my ( $self, $c )  = @_;
+    my $rows = $self->data->recent_articles( offset => 0 );
+    if ( ! @{$rows} ) {
+        HTTP::Exception->throw(503);
+    }
+    my $feed = XML::Feed->new('Atom');
+    $feed->title('LIMILIC');
+    $feed->link($c->req->uri_for('/'));
+
+    $feed->{atom}->add_link({
+        rel => 'self',
+        href => $c->req->uri_for('/feed'),
+    });
+
+    $feed->{atom}->add_link({
+        rel => 'hub',
+        href => 'http://pubsubhubbub.appspot.com',
+    });
+
+    $feed->modified($rows->[0]->{updated_on});
+    $feed->description('new entries of LIMILIC');
+    $feed->author('LIMILIC');
+    $feed->{atom}->id(
+        "tag:" . URI->new($c->req->base)->host . ",2007:" . URI->new($c->req->uri_for('/'))->path
+    );
+
+    for my $article ( @$rows ) {
+        my $entry = XML::Feed::Entry->new('Atom');
+        $entry->title($article->{title});
+        $entry->link($c->req->uri_for('/entry/'.$article->{rid}));
+        $entry->id(
+            "tag:" . URI->new($c->req->base)->host . ",2007:" . URI->new($c->req->uri_for('entry/'.$article->{rid}))->path
+        );
+        $entry->issued($article->{created_on});
+        $entry->modified($article->{updated_on});
+        $entry->author( $article->{anonymous} ? 'anonymous' : $article->{user}->{openid} );
+        $entry->summary( $article->{body} );
+        $entry->{entry}->content( $article->{converted_body} );
+        $feed->add_entry($entry);
+    }
+
+    $c->res->content_type('application/atom+xml;charset=UTF-8');
+    $c->res->body(decode_utf8($feed->as_xml));
+    $c->res;
 };
 
 post '/login' => [qw/session postkey/] => sub {

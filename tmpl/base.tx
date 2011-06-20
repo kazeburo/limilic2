@@ -5,6 +5,7 @@
 <title>LIMILIC <: block title -> { "-" } :> OpenIDでテキストを共有できるWebサービス</title>
 <link rel="alternate" type="applic=ation/atom+xml" title="Atom" href="<: $c.req.uri_for('/feed') :>" />
 <link rel="stylesheet" href="<: $c.req.uri_for('/static/css/site.css') :>" type="text/css" />
+<link rel="shortcut icon" href="<: $c.req.uri_for('/static/images/favicon.ico') :>" />
 </head>
 <body>
 <div id="container">

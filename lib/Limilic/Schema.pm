@@ -107,6 +107,8 @@ sub inflate_article {
     my ($row, $self) = @_;
     $row->{created_on} = $DTFMT->parse_datetime($row->{created_on});
     $row->{created_on}->set_time_zone("Asia/Tokyo");
+    $row->{updated_on} = $DTFMT->parse_datetime($row->{updated_on});
+    $row->{updated_on}->set_time_zone("Asia/Tokyo");
 
     $row->{user} = $self->retrieve_user( id => $row->{user_id} );
     $row->{total_comments} = $self->select_one(q{SELECT COUNT(*) FROM comments WHERE article_id = ?}, $row->{id});

@@ -59,8 +59,18 @@ sub psgi {
             enable match_if addr(@frontproxy), 'ReverseProxy';
         }
         enable 'Static',
-            path => sub { s!^/(favicon.ico|static/)!! },
+            path => sub { s!^/static/!! },
             root => $self->{root_dir} . '/static';
+        enable match_if browser(qr!^Mozilla/4!), 'ForceEnv',
+            "psgix.compress-only-text/html" => 1;
+        enable match_if browser(qr!^Mozilla/4\.0[678]!), 'ForceEnv',
+            "psgix.no-compress" => 1;
+        enable match_if browser(qr!\bMSIE (?:7|8)!), 'ForceEnv',
+            "psgix.no-compress" => 0,
+            "psgix.compress-only-text/html" => 0;
+        enable "Deflater",
+            content_type => ['text/css','text/html','text/javascript','application/javascript'],
+                vary_user_agent => 1;
         enable 'Log::Minimal';
         enable 'Scope::Container';
         enable 'HTTPExceptions';
