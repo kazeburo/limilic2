@@ -325,14 +325,14 @@ sub create_article {
         acl_custom_modify_openid => 'ArrayRef[Str]',
     );
 
-    my $converted_body = $self->converted_body($args->{body});
+    my $converted_body = $self->convert_body($args->{body});
 
     my $txn = $self->txn_scope;
     $self->query(
         q{INSERT INTO articles 
  (rid, user_id, title, body, acl_view_mode, acl_modify_mode, anonymous, created_on, converted_body)
- VALUES (?,?,?,?,?,?,?,?)},
-        map { $args->{$_} } qw/rid user_id title body acl_view_mode acl_modify_mode anonymous created_on/,
+ VALUES (?,?,?,?,?,?,?,?,?)},
+        (map { $args->{$_} } qw/rid user_id title body acl_view_mode acl_modify_mode anonymous created_on/),
         $converted_body
     );
 

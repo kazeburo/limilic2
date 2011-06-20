@@ -38,6 +38,7 @@ requires 'Scope::Container::DBI';
 requires 'DBD::mysql';
 requires 'Digest::SHA';
 requires 'XML::Feed';
+requires 'JSON';
 
 tests 't/*.t';
 author_tests 'xt';

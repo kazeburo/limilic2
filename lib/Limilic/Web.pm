@@ -12,11 +12,20 @@ use DBIx::Sunny;
 use Digest::SHA qw/sha1_base64/;
 use XML::Feed;
 use Encode;
+use Log::Minimal;
 
 sub data {
     my $self = shift;
     local $Scope::Container::DBI::DBI_CLASS = 'DBIx::Sunny'; 
-    my $dbh = Scope::Container::DBI->connect('dbi:mysql:limilic;host=127.0.0.1','','');
+    my $dbh = Scope::Container::DBI->connect('dbi:mysql:limilic;host=127.0.0.1','','',{
+        Callbacks => {
+            connected => sub {
+                my $connect = shift;
+                $connect->do(q{SET SESSION time_zone="Asia/Tokyo"});
+                return;
+            },
+        },
+    });
     Limilic::Schema->new( dbh => $dbh );
 }
 
