@@ -362,7 +362,7 @@ sub update_article_body {
         openid => 'Str',
     );
 
-    my $converted_body = $self->converted_body($args->{body});
+    my $converted_body = $self->convert_body($args->{body});
 
     my $txn = $self->txn_scope;
     my $article = $self->retrieve_article(id => $args->{id}) or creak('article not found');
