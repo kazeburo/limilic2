@@ -113,6 +113,8 @@ sub inflate_article {
     $row->{user} = $self->retrieve_user( id => $row->{user_id} );
     $row->{total_comments} = $self->select_one(q{SELECT COUNT(*) FROM comments WHERE article_id = ?}, $row->{id});
 
+    my $acl = $self->select_all( 'SELECT * FROM article_acl_modify WHERE article_id =?', $row->{id} );
+    my %acl = map { $_->{openid} => 1 } @$acl;
     $row->{can_modify} = sub {
         my $user = shift;
         return if ! $user;
@@ -123,13 +125,15 @@ sub inflate_article {
         return 1 if ( $user_id == $user->{id} );
         #listed user
         return 1 if ( $acl_modify_mode == 3
-            && $self->select_row( 'SELECT * FROM article_acl_modify WHERE article_id =? AND openid =?',
-                                  $row->{id}, $user->{openid} ) );
+            && exists $acl{$user->{openid}} );
         #all user
         return 1 if ( $acl_modify_mode == 4 && $user->{openid} );
 
         return;
     };
+    my $acl_view = $self->select_all( 'SELECT * FROM article_acl_view WHERE article_id =?', $row->{id} );
+    my %acl_view = map { $_->{openid} => 1 } @$acl;
+
     $row->{can_view} = sub {
         my $user = shift;
         return 1 if ( $row->{can_modify}->($user) );
@@ -145,8 +149,7 @@ sub inflate_article {
         #custom
         return 1 if ( $acl_view_mode == 3 
             && $user
-            && $self->select_row( 'SELECT * FROM article_acl_view WHERE article_id =? AND openid =?',
-                                  $row->{id}, $user->{openid} )
+            && exists $acl_view{$user->{openid}}
         );
 
         return;
@@ -367,7 +370,7 @@ sub update_article_body {
     my $txn = $self->txn_scope;
     my $article = $self->retrieve_article(id => $args->{id}) or creak('article not found');
     $self->query(
-        'UPDATE articles SET title = ?, body = ?, converted_body WHERE id = ?',
+        'UPDATE articles SET title = ?, body = ?, converted_body = ? WHERE id = ?',
         $args->{title}, $args->{body}, $converted_body, $args->{id});
     $self->add_article_history(
         article_id => $args->{id},
