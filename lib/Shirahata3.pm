@@ -51,16 +51,9 @@ sub psgi {
         $self = $self->new($root_dir);
     }
 
-    my @frontproxy = map { s/\s//g } split(/,/, $ENV{FRONT_PROXY} || "");
-
     my $app = $self->build_app;
     $app = builder {
-        if ( @frontproxy ) {
-            enable match_if addr(@frontproxy), 'ReverseProxy';
-        }
-        enable 'Static',
-            path => sub { s!^/static/!! },
-            root => $self->{root_dir} . '/static';
+        enable match_if addr(qw/127.0.0.1/), 'ReverseProxy';
         enable match_if browser(qr!^Mozilla/4!), 'ForceEnv',
             "psgix.compress-only-text/html" => 1;
         enable match_if browser(qr!^Mozilla/4\.0[678]!), 'ForceEnv',
@@ -69,8 +62,11 @@ sub psgi {
             "psgix.no-compress" => 0,
             "psgix.compress-only-text/html" => 0;
         enable "Deflater",
-            content_type => ['text/css','text/html','text/javascript','application/javascript'],
+            content_type => ['text/css','text/html','text/javascript','application/javascript','application/atom+xml'],
                 vary_user_agent => 1;
+        enable 'Static',
+            path => sub { s!^/static/!! },
+            root => $self->{root_dir} . '/static';
         enable 'Log::Minimal';
         enable 'Scope::Container';
         enable 'HTTPExceptions';

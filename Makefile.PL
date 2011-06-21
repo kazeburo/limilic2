@@ -12,6 +12,7 @@ requires 'Plack::Middleware::Scope::Container';
 requires 'Plack::Middleware::HTTPExceptions';
 requires 'Plack::Middleware::ForceEnv';
 requires 'Plack::Middleware::Deflater';
+requires 'Plack::Middleware::ReverseProxy';
 requires 'Router::Simple';
 requires 'Cwd';
 requires 'File::Basename';
