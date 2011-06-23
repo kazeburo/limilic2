@@ -4,8 +4,7 @@
 
 <div class="article_date">
 created on <span><a href="<: $c.req.uri_for('/entry/' ~ $article.rid) :>"><: $article.created_on.ymd :> <: $article.created_on.hms :></a></span>
-: my $can_modify = $article.can_modify;
-: if ( $can_modify($c.stash.user) ) {
+: if ( ($article.can_modify)($c.stash.user) ) {
  | <a href="<: $c.req.uri_for('/entry/'~$article.rid~'/edit') :>">編集</a>
 : }
  | <a href="<: $c.req.uri_for('/entry/' ~ $article.rid) :>#comment">コメント(<: $article.total_comments || 0 :>)</a>

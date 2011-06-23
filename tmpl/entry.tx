@@ -9,13 +9,12 @@
 : for $article_comments -> $comment {
 <div class="comment">
 <div class="comment_sign">
-: my $can_delete = $comment.can_delete;
-: if ( $can_delete($c.stash.user)) {
+: if ( ($comment.can_delete)($c.stash.user)) {
 <form id="openid_form" action="<: $c.req.uri_for('/entry/'~$c.stash.article.rid~'/comment/'~$comment.id~'/delete') :>" method="post" onsubmit="return confirm('削除しますか？')">
 <input type="hidden" id="postkey" name="postkey" value="<: $c.stash.session.postkey :>" />
 : }
 posted by <span><a href="<: $comment.openid :>"><: $comment.openid :></a></span> | <span><: $comment.created_on.ymd :> <: $comment.created_on.hms :></span>
-: if ( $can_delete($c.stash.user)) {
+: if ( ($comment.can_delete)($c.stash.user)) {
 | <input type="submit" id="delete_comment_<: $comment.id :>" name="delete_comment" value=" 削除 " style="border: solid 1px #999; background-color: #ccc; padding: 0px;  cursor: pointer; border-radius: 2px; -webkit-border-radius: 2px; -moz-border-radius: 2px; color: #666" />
 </form>
 : }
