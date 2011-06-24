@@ -22,7 +22,7 @@ requires 'Text::Xslate', 1.1003;
 requires 'HTML::FillInForm::Lite';
 requires 'Try::Tiny', 0.09;
 requires 'Class::Accessor::Lite';
-requires 'DBIx::Sunny', 0.12;
+requires 'DBIx::Sunny', 0.13;
 requires 'Math::BigInt::GMP';
 requires 'Net::OpenID::Consumer';
 requires 'YAML';

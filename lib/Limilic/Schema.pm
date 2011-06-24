@@ -322,7 +322,8 @@ sub create_article {
         anonymous => 'Uint',
         created_on => {
             isa => 'DateTime',
-            default => sub { $DTFMT->format_datetime(DateTime->now(time_zone=>'Asia/Tokyo')) },
+            default => sub { DateTime->now( time_zone=>'Asia/Tokyo' ) },
+            deflater => sub { $DTFMT->format_datetime(shift) },
         },
         acl_custom_view_openid => 'ArrayRef[Str]',
         acl_custom_modify_openid => 'ArrayRef[Str]',
@@ -456,7 +457,8 @@ sub add_comment {
         body => 'Str',
         created_on => {
             isa => 'DateTime',
-            default => sub { $DTFMT->format_datetime(DateTime->now( time_zone=>'Asia/Tokyo' )) },
+            default => sub { DateTime->now( time_zone=>'Asia/Tokyo' ) },
+            deflater => sub { $DTFMT->format_datetime(shift) },
         },
     );
 
