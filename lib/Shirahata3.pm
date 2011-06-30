@@ -10,7 +10,6 @@ use Plack::Builder::Conditionals;
 use Router::Simple;
 use Cwd qw//;
 use File::Basename qw//;
-use HTTP::Exception;
 use Log::Minimal 0.08;
 use Text::Xslate 1.1003;
 use HTML::FillInForm::Lite qw//;
@@ -20,7 +19,7 @@ use Class::Accessor::Lite (
     rw => [qw/root_dir/]
 );
 
-our @EXPORT = qw/new root_dir psgi build_app _router _connect get post get_or_post filter wrap_filter/;
+our @EXPORT = qw/new root_dir psgi build_app _router _connect get post filter wrap_filter/;
 
 sub import {
     my ($class, $name) = @_;
@@ -69,7 +68,6 @@ sub psgi {
             root => $self->{root_dir} . '/static';
         enable 'Log::Minimal';
         enable 'Scope::Container';
-        enable 'HTTPExceptions';
         $app;
     };
 }
@@ -97,14 +95,13 @@ sub build_app {
         },
     );
     
-    sub {
+    my $app = sub {
         my $env = shift;
         my $c = Shirahata3::Connection->new({
             tx => $tx,
             req => Shirahata3::Request->new($env),
             res => Shirahata3::Response->new(200),
             stash => {},
-            cleanup => [],
             debug => $ENV{PLACK_ENV} && $ENV{PLACK_ENV} eq 'development' ? 1 : 0,
         });
         $c->res->content_type('text/html; charset=UTF-8');
@@ -115,7 +112,7 @@ sub build_app {
         }
         catch {
             warnf $_;
-            HTTP::Exception->throw(400);
+            $c->halt(400,'unexpected character in request');
         };
 
         if ( $p ) {
@@ -152,8 +149,40 @@ sub build_app {
             return $app->($self, $c)->finalize;
         }
         else {
-            HTTP::Exception->throw(404);
+            $c->halt(404);
         }
+    };
+
+    #copy from PM::HTTPExceptions
+    sub {
+        my $env = shift;
+        my $res = try {
+            $app->($env);
+        } catch {
+            if ( ref $_ && ref $_ eq 'Shirahata3::Exception' ) {
+                return $_->response;
+            }
+            die $_;
+        };
+
+        return $res if ref $res eq 'ARRAY';
+        return sub {
+            my $respond = shift;
+            my $writer;
+            try {
+                $res->(sub { return $writer = $respond->(@_) });
+            } catch {
+                if ($writer) {
+                    Carp::cluck $_;
+                    $writer->close;
+                } else {
+                    if ( ref $_ && ref $_ eq 'Shirahata3::Exception' ) {
+                        return $respond->($_->response);
+                    }
+                    die $_;
+                }
+            };
+        };
     };
 }
 
@@ -182,11 +211,6 @@ sub _connect {
         { action => $code, filter => $filter },
         { method => [ map { uc $_ } @$methods ] } 
     );
-}
-
-sub get_or_post {
-    my $class = caller;
-    $class->_connect( ['GET','HEAD','POST'], @_  );
 }
 
 sub get {
@@ -225,28 +249,63 @@ sub wrap_filter {
 
 1;
 
+package Shirahata3::Exception;
+
+use strict;
+use warnings;
+
+sub new {
+    my $class = shift;
+    my $code = shift;
+    my %args = (
+        code => $code,
+    );
+    if ( @_ == 1 ) {
+        $args{message} = shift;
+    }
+    elsif ( @_ % 2 == 0) {
+        %args = (
+            %args,
+            @_
+        );
+    }
+    bless \%args, $class;
+}
+
+sub response {
+    my $self = shift;
+    my $code = $self->{code} || 500;
+    my $message = $self->{message};
+    $message ||= HTTP::Status::status_message($code);
+
+    my @headers = (
+         'Content-Type'   => 'text/plain',
+         'Content-Length' => length($message),
+    );
+
+    if ($code =~ /^3/ && (my $loc = eval { $self->{location} })) {
+        push(@headers, Location => $loc);
+    }
+
+    return [ $code, \@headers, [ $message ] ];
+}
+
 package Shirahata3::Connection;
 
 use strict;
 use warnings;
 use JSON;
-use HTTP::Exception;
 use Class::Accessor::Lite (
     new => 1,
-    rw => [qw/req res stash args tx cleanup debug/]
+    rw => [qw/req res stash args tx debug/]
 );
 
 *request = \&req;
 *response = \&res;
 
-sub throw {
+sub halt {
     my $self = shift;
-    HTTP::Exception->throw(@_);
-}
-
-sub cleanup_register {
-    my $self = shift;
-    push @{$self->cleanup}, @_;
+    die Shirahata3::Exception->new(@_);
 }
 
 sub render {

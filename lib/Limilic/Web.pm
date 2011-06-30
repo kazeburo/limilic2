@@ -121,7 +121,7 @@ filter 'postkey' => sub {
         my ( $self, $c )  = @_;
         if ( !$c->req->param('postkey') || $c->stash->{session}->{postkey} ne 
                  $c->req->param('postkey') ) {
-            HTTP::Exception->throw(403);
+            $c->halt(403);
         }
         $app->($self,$c);
     };
@@ -132,7 +132,7 @@ filter 'user' => sub {
     sub {
         my ( $self, $c )  = @_;
         if ( ! $c->stash->{user} ) {
-            HTTP::Exception->throw(403);
+            $c->halt(403);
         }
         $app->($self,$c);
     };
@@ -144,10 +144,10 @@ filter 'entry' => sub {
         my ( $self, $c )  = @_;
         my $rid = $c->args->{rid};
         my $article = $self->data->retrieve_rid_article( rid => $rid );
-        HTTP::Exception->throw(404) unless $article;
+        $c->halt(404, 'entry not found') unless $article;
         
         if ( !$article->{can_view}->($c->stash->{user}) ) {
-            HTTP::Exception->throw(403);
+            $c->halt(403);
         }
         $c->stash->{article} = $article;
         $c->stash->{article_comment} =  $self->data->retrieve_article_comment( article_id => $article->{id} );
@@ -161,7 +161,7 @@ filter 'modify_entry' => sub {
     sub {
         my ( $self, $c )  = @_;
         if ( !$c->stash->{article}->{can_modify}->($c->stash->{user}) ) {
-            HTTP::Exception->throw(403);
+            $c->halt(403);
         }
         $app->($self,$c);
     };
@@ -180,7 +180,7 @@ get '/feed' => sub {
     my ( $self, $c )  = @_;
     my $rows = $self->data->recent_articles( offset => 0 );
     if ( ! @{$rows} ) {
-        HTTP::Exception->throw(503);
+        $c->halt(503);
     }
     my $feed = XML::Feed->new('Atom');
     $feed->title('LIMILIC');
@@ -315,7 +315,7 @@ post '/account/network' => [qw/session postkey user/] => sub {
 post '/account/add_network' => [qw/session postkey user/] => sub {
     my ( $self, $c )  = @_;
     if( !$c->req->param('openid_url') ) {
-        HTTP::Exception->throw(403, status_message=>'no openi');
+        $c->halt(403, 'no openid');
     }
 
     my $csr = Net::OpenID::Consumer->new(
@@ -327,7 +327,7 @@ post '/account/add_network' => [qw/session postkey user/] => sub {
 
     my $identity = $csr->claimed_identity($c->req->param('openid_url'));
     if( !$identity ) {
-        HTTP::Exception->throw(403, status_message => "openid resolution fail:". $csr->errcode);
+        $c->halt(403, "openid resolution fail:". $csr->errcode);
     }
 
     $self->data->add_user_networks(
@@ -479,9 +479,9 @@ post '/entry/{rid:[a-z0-9]{16}}/comment/{cid:[0-9]+}/delete' => [qw/session post
         article_id => $c->stash->{article}->{id}
     );
 
-    HTTP::Exception->throw(404) if ( !$comment );
+    $c->halt(404) if ( !$comment );
     if ( !$comment->{can_delete}->($c->stash->{user}) ) {
-        HTTP::Exception->throw(403);
+        $c->halt(403);
     }
 
     $self->data->delete_comment(id => $comment->{id} );
